@@ -126,7 +126,7 @@ class tex_to_json:
         )
         result = re.finditer(ex, Text)
         for item in result:
-            if item.groups()[1] != None:
+            if item.groups()[1] != None and item.groups()[2] != "\n":
                 output[item.groups()[1]] = item.groups()[2]
         if len(output) != 0:
             return output
