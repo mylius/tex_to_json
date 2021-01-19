@@ -126,7 +126,7 @@ class tex_to_json:
         )
         result = re.finditer(ex, Text)
         for item in result:
-            if item.groups()[1] != None and item.groups()[2] != "\n":
+            if item.groups()[1] != None:
                 output[item.groups()[1]] = item.groups()[2]
         if len(output) != 0:
             return output
@@ -138,7 +138,8 @@ class tex_to_json:
         output = OrderedDict()
         if Text.count("\\begin{itemize}") == 1:
             para = Text[: Text.find("\\begin{itemize}")]
-            output[self.count_text()] = para
+            if para != "\\n":
+                output[self.count_text()] = para
             para = Text[Text.find("\\end{itemize}") + 13 :]
 
             ex = re.compile("(?=(\\\\begin\{itemize\}((.|\\n)*?)\\\end\{itemize\}))")
@@ -147,7 +148,8 @@ class tex_to_json:
             ex = re.compile("\\\item(.*)")
             result = re.findall(ex, Text)
             output[self.count_list()] = result
-            output[self.count_text()] = para
+            if para != "\n":
+                output[self.count_text()] = para
             return output
         else:
             return Text
@@ -176,8 +178,9 @@ class tex_to_json:
         output = output.split("\end{abstract}")[1]
         if abstract != "":
             self.document["abstract"] = abstract
-        
         self.document["content"] = output
+        while self.document["content"].find("\n\n"):
+            self.document["content"].replace("\n\n","\n")
         with open("test.txt", "w") as f:
             f.write(output)
         self.do_in_last_layer(self.document["content"], self.find_chapters)
@@ -189,6 +192,3 @@ class tex_to_json:
         with open("test.json", "w") as json_file:
             json_file.write(dump)
 
-
-parser = tex_to_json("attention.tar.gz")
-parser.parse()
