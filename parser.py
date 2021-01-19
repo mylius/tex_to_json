@@ -73,11 +73,8 @@ class tex_to_json:
                         for idx, item in enumerate(v):
                             v[idx] = function(item)
                     self.do_in_last_layer(v, function)
-
-    def itemize_to_list(self, Text):
-        output = []
-        results = re.findall("\\\item (.*)", Text)
-        print(results)
+        else:
+            self.document["content"] = function(d)
 
     def find_chapters(self, Text):
         output = OrderedDict()
@@ -86,39 +83,37 @@ class tex_to_json:
         )
         result = re.finditer(ex, Text)
         for item in result:
-            output[item.groups()[1]] = item.groups()[2]
+            output[item.groups()[6]] = item.groups()[3]
         if len(output) > 0:
             return output
         else:
-            return text
+            return Text
 
     def find_sections(self, Text):
         output = OrderedDict()
         ex = re.compile(
-            "(?=(\\\section\{(.*?)\}((.|\\n)*?)(\\\section\{(.*?)\}|\\\\bibliographystyle)))"
+            "(?=((?:\\\section\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\section\{(?:.*?)\}|$)))"
         )
         result = re.finditer(ex, Text)
         for item in result:
-            output[item.groups()[1]] = item.groups()[2]
-        if len(output) > 0:
+            if item.groups()[1] == None:
+                output[self.count_text()] = item.groups()[2]
+            else:
+                output[item.groups()[1]] = item.groups()[2]
+        if len(output) != 0:
             return output
         else:
-            return text
+            return Text
 
     def find_subsections(self, Text):
         output = OrderedDict()
-        if Text.find("\subsection") != -1:
-            para = Text[: Text.find("\subsection")]
-            output[self.count_text()] = para
-        ex = re.compile("(?=(\\\subsection\{(.*?)\}((.|\\n)*?)\\\subsection\{(.*?)\}))")
-        result = re.search(ex, Text)
-        if result != None:
-            output[result.groups()[1]] = result.groups()[2]
-        elif result == None and len(output) != 0:
-            para = Text[Text.find("\subsection") + 12 :]
-            para = para.split("}", 1)
-            output[para[0]] = para[1]
-            self.text_counter += 1
+        ex = re.compile(
+            "(?=((?:\\\subsection\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\subsection\{(?:.*?)\}|$)))"
+        )
+        result = re.finditer(ex, Text)
+        for item in result:
+            if item.groups()[1] != None:
+                output[item.groups()[1]] = item.groups()[2]
         if len(output) != 0:
             return output
         else:
@@ -126,23 +121,18 @@ class tex_to_json:
 
     def find_subsubsections(self, Text):
         output = OrderedDict()
-        if Text.find("\subsubsection") != -1:
-            para = Text[: Text.find("\subsubsection")]
-            output[self.count_text()] = para
         ex = re.compile(
-            "(?=(\\\subsubsection\{(.*?)\}((.|\\n)*?)\\\subsubsection\{(.*?)\}))"
+            "(?=((?:\\\subsubsection\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\subsubsection\{(?:.*?)\}|$)))"
         )
-        result = re.search(ex, Text)
-        if result != None:
-            output[result.groups()[1]] = result.groups()[2]
-        elif result == None and len(output) != 0:
-            para = Text[Text.find("\subsubsection") + 15 :]
-            para = para.split("}", 1)
-            output[para[0]] = para[1]
+        result = re.finditer(ex, Text)
+        for item in result:
+            if item.groups()[1] != None:
+                output[item.groups()[1]] = item.groups()[2]
         if len(output) != 0:
             return output
         else:
             return Text
+
 
     def find_lists(self, Text):
         output = OrderedDict()
@@ -171,9 +161,7 @@ class tex_to_json:
             if start:
                 if (
                     not line.startswith("%")
-                    and "\caption{" not in line
                     and "\maketitle" not in line
-                    and "\label{" not in line
                     and "\include" not in line
                     and "\\vspace{" not in line
                     and "\\usepackage" not in line
@@ -188,12 +176,19 @@ class tex_to_json:
         output = output.split("\end{abstract}")[1]
         if abstract != "":
             self.document["abstract"] = abstract
+        
         self.document["content"] = output
-        self.do_in_last_layer(self.document, self.find_chapters)
-        self.do_in_last_layer(self.document, self.find_sections)
-        self.do_in_last_layer(self.document, self.find_subsections)
-        self.do_in_last_layer(self.document, self.find_subsubsections)
-        self.do_in_last_layer(self.document, self.find_lists)
+        with open("test.txt", "w") as f:
+            f.write(output)
+        self.do_in_last_layer(self.document["content"], self.find_chapters)
+        self.do_in_last_layer(self.document["content"], self.find_sections)
+        self.do_in_last_layer(self.document["content"], self.find_subsections)
+        self.do_in_last_layer(self.document["content"], self.find_subsubsections)
+        self.do_in_last_layer(self.document["content"], self.find_lists)
         dump = json.dumps(self.document, indent=4)
         with open("test.json", "w") as json_file:
             json_file.write(dump)
+
+
+parser = tex_to_json("attention.tar.gz")
+parser.parse()
