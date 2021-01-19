@@ -21,6 +21,12 @@ class tex_to_json:
         self.list_counter += 1
         return "%List" + str(self.list_counter - 1)
 
+    def clean_text(self, text):
+        if text.startswith("\n") or text.startswith(" "):
+            return text[1:]
+        else:
+            return text
+
     def get_content_from_tar(self, filename):
         tar = tarfile.open(self.tarname)
         for member in tar.getmembers():
@@ -76,63 +82,32 @@ class tex_to_json:
         else:
             self.document["content"] = function(d)
 
-    def find_chapters(self, Text):
+    def find_part(self, regex, Text):
         output = OrderedDict()
-        ex = re.compile(
-            "(?=(\\\chapter\{(.*?)\}((.|\\n)*?)(\\\chapter\{(.*?)\}|\\\\bibliographystyle)))"
-        )
+        ex = re.compile(regex)
         result = re.finditer(ex, Text)
         for item in result:
-            output[item.groups()[6]] = item.groups()[3]
-        if len(output) > 0:
+            content = self.clean_text(item.groups()[2])
+            if item.groups()[1] == None and content != "\n" and content != "":
+                output[self.count_text()] = content
+            elif item.groups()[1] != None:
+                output[item.groups()[1]] = content
+        if len(output) > 1:
             return output
         else:
             return Text
+
+    def find_chapters(self, Text):
+        return self.find_part("(?=(\\\chapter\{(.*?)\}((.|\\n)*?)(\\\chapter\{(.*?)\}|\\\\bibliographystyle)))",Text)
 
     def find_sections(self, Text):
-        output = OrderedDict()
-        ex = re.compile(
-            "(?=((?:\\\section\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\section\{(?:.*?)\}|$)))"
-        )
-        result = re.finditer(ex, Text)
-        for item in result:
-            if item.groups()[1] == None:
-                output[self.count_text()] = item.groups()[2]
-            else:
-                output[item.groups()[1]] = item.groups()[2]
-        if len(output) != 0:
-            return output
-        else:
-            return Text
+        return self.find_part("(?=((?:\\\section\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\section\{(?:.*?)\}|$)))",Text)
 
     def find_subsections(self, Text):
-        output = OrderedDict()
-        ex = re.compile(
-            "(?=((?:\\\subsection\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\subsection\{(?:.*?)\}|$)))"
-        )
-        result = re.finditer(ex, Text)
-        for item in result:
-            if item.groups()[1] != None:
-                output[item.groups()[1]] = item.groups()[2]
-        if len(output) != 0:
-            return output
-        else:
-            return Text
+        return self.find_part("(?=((?:\\\subsection\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\subsection\{(?:.*?)\}|$)))",Text)
 
     def find_subsubsections(self, Text):
-        output = OrderedDict()
-        ex = re.compile(
-            "(?=((?:\\\subsubsection\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\subsubsection\{(?:.*?)\}|$)))"
-        )
-        result = re.finditer(ex, Text)
-        for item in result:
-            if item.groups()[1] != None:
-                output[item.groups()[1]] = item.groups()[2]
-        if len(output) != 0:
-            return output
-        else:
-            return Text
-
+        return self.find_part("(?=((?:\\\subsubsection\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\subsubsection\{(?:.*?)\}|$)))",Text)
 
     def find_lists(self, Text):
         output = OrderedDict()
@@ -148,7 +123,7 @@ class tex_to_json:
             ex = re.compile("\\\item(.*)")
             result = re.findall(ex, Text)
             output[self.count_list()] = result
-            if para != "\n":
+            if para != "\n" and para != "":
                 output[self.count_text()] = para
             return output
         else:
@@ -177,10 +152,14 @@ class tex_to_json:
         abstract = output.split("\\begin{abstract}")[1].split("\end{abstract}")[0]
         output = output.split("\end{abstract}")[1]
         if abstract != "":
-            self.document["abstract"] = abstract
+            self.document["abstract"] = self.clean_text(abstract)
         self.document["content"] = output
-        while self.document["content"].find("\n\n"):
-            self.document["content"].replace("\n\n","\n")
+        while (
+            self.document["content"].find("\n\n") != -1
+            or self.document["content"].find("\n \n") != -1
+        ):
+            self.document["content"] = self.document["content"].replace("\n\n", "\n")
+            self.document["content"] = self.document["content"].replace("\n \n", "\n")
         with open("test.txt", "w") as f:
             f.write(output)
         self.do_in_last_layer(self.document["content"], self.find_chapters)
@@ -191,4 +170,3 @@ class tex_to_json:
         dump = json.dumps(self.document, indent=4)
         with open("test.json", "w") as json_file:
             json_file.write(dump)
-
