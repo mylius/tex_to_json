@@ -10,6 +10,7 @@ class tex_to_json:
     def __init__(self, tarname):
         self.text_counter = 0
         self.list_counter = 0
+        self.footnote_counter = 0
         self.tarname = tarname
         self.document = {}
 
@@ -20,6 +21,10 @@ class tex_to_json:
     def count_list(self):
         self.list_counter += 1
         return "%List" + str(self.list_counter - 1)
+    
+    def count_footnote(self):
+        self.footnote_counter += 1
+        return str(self.footnote_counter - 1)
 
     def clean_text(self, text):
         if text.startswith("\n") or text.startswith(" "):
@@ -109,6 +114,9 @@ class tex_to_json:
     def find_subsubsections(self, Text):
         return self.find_part("(?=((?:\\\subsubsection\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\subsubsection\{(?:.*?)\}|$)))",Text)
 
+    def find_paragraphs(self, Text):
+        return self.find_part("(?=((?:\\\paragraph\{(.*?)\}|^)((?:.|\\n)*?)(?:\\\paragraph\{(?:.*?)\}|$)))",Text)
+
     def find_lists(self, Text):
         output = OrderedDict()
         if Text.count("\\begin{itemize}") == 1:
@@ -132,8 +140,38 @@ class tex_to_json:
     def parse(self):
         content = self.read_content_from_file(self.find_main())
         start = False
+        content= re.sub("\\\\textbf{(.*?)}",r"<b>\1</b>",content)
+        content= re.sub("\\\\texttt{(.*?)}",r"<code>\1</code>",content)
+        content= re.sub("\\\emph{(.*?)}",r"<i>\1</i>",content)
+        content= re.sub("\\{\\\em (.*?)}",r"<em>\1</em>",content)
+        content= re.sub("\\{\\\\bf (.*?)}",r"<b>\1</b>",content)
+        content= re.sub("\\{\\\\tt (.*?)}",r"<code>\1</code>",content)
+        content= re.sub("\\{\\\it (.*?)}",r"<i>\1</i>",content)
+        content= re.sub("\\\\label{(.*?)}",r"<a name=\1></a>",content)
+        content= re.sub("\\\\url{(.*?)}",r"<a href=\1>\1</a>",content)
+        content= re.sub("~\\\\ref{(.*?)}",r"<a href=#\1>↩</a>",content)
+        content= re.sub("\\\\ref{(.*?)}",r"<a href=ä\1>↩</a>",content)
+        content= re.sub("%auto-ignore\\n",r"",content)
+        content= re.sub("\\~\\\cite{.*?}",r"",content)
+        content= re.sub("\\~\\\citet{.*?}",r"",content)
+        content= re.sub("\\~\\\citep{.*?}",r"",content)
+        content= re.sub("\\\cite{.*?}",r"",content)
+        content= re.sub("\\\citet{.*?}",r"",content)
+        content= re.sub("\\\citep{.*?}",r"",content)
+        content = content.replace("\\quad","&nbsp;")
+        content = content.replace("\\%","%")
+        content = content.replace("\\#","#")
+        content = content.replace("``","\"")
+        content = content.replace("''","\"")
         output = ""
-        self.document["title"] = re.findall("\\\\title\{(.*?)\}", content)[0]
+        self.document["title"] = re.findall("\\\\title\{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*\}", content)[0][7:-1]
+        self.document["title"] = re.sub("\\\\","",self.document["title"])
+        self.document["author"] = re.findall("\\\\author\{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*\}",content)[0][8:-1]
+        self.document["author"] =  self.document["author"].replace("\And","<br/>")
+        self.document["author"] =  self.document["author"].replace("\AND","<br/>")
+        self.document["author"] =  self.document["author"].replace("\\\\","<br/>")
+        self.document["author"] =  self.document["author"].replace("<br/><br/>","<br/>")
+        self.document["author"] = re.sub("\\\\thanks\{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*\}","",self.document["author"])        
         for line in content.split("\n"):
             if start:
                 if (
@@ -166,7 +204,11 @@ class tex_to_json:
         self.do_in_last_layer(self.document["content"], self.find_sections)
         self.do_in_last_layer(self.document["content"], self.find_subsections)
         self.do_in_last_layer(self.document["content"], self.find_subsubsections)
+        self.do_in_last_layer(self.document["content"], self.find_paragraphs)
         self.do_in_last_layer(self.document["content"], self.find_lists)
         dump = json.dumps(self.document, indent=4)
-        with open("test.json", "w") as json_file:
+        with open(self.tarname[:-7]+".json", "w") as json_file:
             json_file.write(dump)
+
+parser = tex_to_json("test_new.tar.gz")
+parser.parse()
